@@ -1,73 +1,94 @@
-# React + TypeScript + Vite
+# 🏙️ Citizen Services Chatbot
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern, AI-powered chatbot designed to streamline municipal services for citizens. Built with **React**, **Supabase**, and **Google Gemini AI**, this application provides a conversational interface for bill payments, grievance redressal, and service information in multiple languages (English, Hindi, and Hinglish).
 
-Currently, two official plugins are available:
+## ✨ Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **🤖 AI-Powered Conversations**: Uses **Google Gemini 2.5 Flash** to understand natural language and context.
+- **🌍 Multi-Language Support**:
+  - English
+  - Hindi (हिंदी)
+  - Hinglish (Conversational Hindi-English)
+- **🏢 Core Services**:
+  - **Bill Payments**: Electricity, Water, and Property Tax (Integrated demo data).
+  - **Grievance Redressal**: Report issues like potholes, water supply, and garbage collection.
+  - **Status Tracking**: Check the status of complaints and applications.
+  - **Information Portal**: Guides for Birth, Income, and Caste certificates, and Trade/Shop licenses.
+- **💬 WhatsApp-Style UI**: Familiar, dark-themed chat interface for intuitive usage.
+- **🔐 Secure Backend**: Powered by **Supabase** with Row Level Security (RLS).
 
-## React Compiler
+## 🛠️ Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend**: [React 19](https://react.dev/), [Vite](https://vitejs.dev/)
+- **Styling**: Custom CSS (WhatsApp Dark Theme)
+- **AI Engine**: [Google Gemini API](https://ai.google.dev/)
+- **Backend & Database**: [Supabase](https://supabase.com/) (PostgreSQL)
 
-## Expanding the ESLint configuration
+## 🚀 Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js (v18 or higher)
+- npm or yarn
+- A [Supabase](https://supabase.com/) account
+- A [Google AI Studio](https://aistudio.google.com/) API Key
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Installation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/Skyaster/Citizen-services-chatbot.git
+   cd Citizen-services-chatbot
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables**
+   Create a `.env` file in the root directory and copy the contents from `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in your API keys:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_project_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   VITE_GEMINI_API_KEY=your_gemini_api_key
+   ```
+
+### 🗄️ Database Setup
+
+1. Go to your Supabase Project Dashboard -> **SQL Editor**.
+2. Open the file `supabase/schema.sql` from this repository.
+3. Copy the entire content and run it in the Supabase SQL Editor.
+   - This will create the necessary tables (`citizens`, `grievances`, `applications`, `bills`, `conversations`).
+   - It also sets up sample data for bills and configures Security Policies (RLS).
+
+### 🏃‍♂️ Running the App
+
+Start the development server:
+
+```bash
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open [http://localhost:5173](http://localhost:5173) in your browser to start chatting!
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 💡 Usage Guide
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Here are some things you can ask the chatbot:
+
+- **Pay Bills**: "I want to pay my electricity bill" or "Pay water tax".
+- **Report Issues**: "There is a pothole on MG Road" or "Garbage not collected in Ward 4".
+- **Certificates**: "How to apply for a birth certificate?" or "Income certificate documents".
+- **Track Status**: "Check status of GR12345".
+- **Change Language**: "Hindi mein baat karo" or "Switch to English".
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+*Developed for Hackathon 3.0*
