@@ -72,15 +72,21 @@ export async function getBill(consumer_number: string): Promise<Bill | null> {
             .eq('consumer_number', consumer_number)
             .single();
 
-        if (error) {
-            console.error('Supabase error:', error);
-            throw error;
+        if (error || !data) {
+            console.warn('Supabase lookup failed or empty, checking demo data...');
+            // Fallback to demo data if available (Hybrid mode)
+            const demoBill = demoBills.get(consumer_number);
+            if (demoBill) return demoBill;
+
+            if (error) console.error('Supabase error:', error);
+            return null;
         }
         console.log('Supabase data:', data);
         return data;
     } catch (error) {
         console.error('Error fetching bill:', error);
-        return null;
+        // Fallback to demo data on crash
+        return demoBills.get(consumer_number) || null;
     }
 }
 

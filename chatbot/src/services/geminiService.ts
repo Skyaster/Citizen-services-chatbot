@@ -143,6 +143,9 @@ Type what you need!`;
 /**
  * Demo responses when no API key is configured
  */
+/**
+ * Demo responses when no API key is configured
+ */
 function getDemoResponse(userMessage: string, context: ConversationContext): ChatResponse {
     const msg = userMessage.toLowerCase().trim();
     const lang = context.language || 'en';
@@ -223,14 +226,14 @@ Jo chahiye woh type karein!`;
 
         // Step 2: Collect Location (if not yet collected)
         if (!data.location) {
-            const locationMsg = lang === 'hi'
-                ? `जी। कृपया पता और नजदीकी लैंडमार्क दर्ज करें।`
+            const landmarkMsg = lang === 'hi'
+                ? `जी। कृपया नजदीकी लैंडमार्क बताएं?`
                 : lang === 'hinglish'
-                    ? `Ok. Please enter your Address and nearby Landmark.`
-                    : `Got it. Please share your **Address** and **Nearby Landmark**.`;
+                    ? `Ok. Ab nearby Landmark batayein?`
+                    : `Got it. Please share a **Nearby Landmark**?`;
 
             return {
-                message: locationMsg,
+                message: landmarkMsg,
                 structuredData: {
                     type: 'grievance', // Keep in grievance flow
                     category: data.category as string,
@@ -239,11 +242,8 @@ Jo chahiye woh type karein!`;
             };
         }
 
-        // Step 3: Collect Description (if location is present but description is missing)
-        // Note: In the previous step, we assigned userMessage to location.
-        // But if we are here, it means location was ALREADY in context.
-        // So the CURRENT userMessage is the description.
-        if (!data.description) {
+        // Step 3: Collect Landmark (if location present but landmark missing)
+        if (!data.landmark) {
             const descMsg = lang === 'hi'
                 ? `धन्यवाद। कृपया समस्या का विवरण दें (फोटो अगला है)।`
                 : lang === 'hinglish'
@@ -251,19 +251,39 @@ Jo chahiye woh type karein!`;
                     : `Noted. Please briefly **describe the problem** (You'll be asked for a photo next).`;
 
             return {
-                message: descMsg,
+                message: descMsg, // Ask for NEXT step (Description)
                 structuredData: {
                     type: 'grievance',
                     category: data.category as string,
                     location: data.location as string,
-                    description: userMessage
+                    landmark: userMessage // Capture CURRENT step (Landmark)
                 }
             };
         }
 
-        // Step 4: Mandatory Photo (if description is present but no attachment)
-        // We check if the CURRENT message has an attachment OR if context already has one.
-        const hasAttachment = userMessage.startsWith('[ATTACHMENT:') || (data.attachments && data.attachments.length > 0);
+        // Step 4: Collect Description (if landmark present but description missing)
+        // Step 4: Collect Description (if landmark present but description missing)
+        if (!data.description) {
+            const photoMsg = lang === 'hi'
+                ? `🛑 **फोटो अनिवार्य है**\n\nकृपया समस्या की फोटो भेजें।`
+                : lang === 'hinglish'
+                    ? `🛑 **Photo Mandatory hai**\n\nPlease issue ka photo bhejein.`
+                    : `🛑 **Photo Required**\n\nPlease attach a **photo** of the issue.`;
+
+            return {
+                message: photoMsg, // Ask for NEXT step (Photo)
+                structuredData: {
+                    type: 'grievance',
+                    category: data.category as string,
+                    location: data.location as string,
+                    landmark: data.landmark as string,
+                    description: userMessage // Capture CURRENT step (Description)
+                }
+            };
+        }
+
+        // Step 5: Mandatory Photo (if description is present but no attachment)
+        const hasAttachment = userMessage.startsWith('[ATTACHMENT:') || (data.attachments && (data.attachments as any[]).length > 0);
 
         if (!hasAttachment) {
             const photoMsg = lang === 'hi'
@@ -279,10 +299,13 @@ Jo chahiye woh type karein!`;
                     type: 'grievance',
                     category: data.category as string,
                     location: data.location as string,
+                    landmark: data.landmark as string,
                     description: data.description as string
                 }
             };
         }
+
+
 
         // All steps complete
         const finalMsg = lang === 'hi'
@@ -297,6 +320,7 @@ Jo chahiye woh type karein!`;
                 type: 'grievance',
                 category: data.category as string,
                 location: data.location as string,
+                landmark: data.landmark as string,
                 description: data.description as string,
                 // The attachment is handled by chatService, but we confirm flow is done
             }
@@ -304,16 +328,14 @@ Jo chahiye woh type karein!`;
     }
 
     // 2. Keyword Matching (New Flows)
-    if (msg.includes('bill') || msg.includes('pay') || msg.includes('bijli') || msg.includes('paani')) {
+
+    // --- Bill Payment ---
+    if (msg.includes('bill') || msg.includes('pay') || msg.includes('tax') || msg.includes('bijli') || msg.includes('paani') || msg.includes('vera')) {
         if (msg.includes('electricity') || msg.includes('bijli')) {
             return {
                 message: `⚡ *Electricity Bill Payment*
-
-I can help you pay your electricity bill.
-
-Please share your *Consumer Number* (found on your bill, usually 10-12 digits).
-
-Example: 1234567890`,
+                
+Please share your *Consumer Number* (found on your bill, usually 10-12 digits).`,
                 structuredData: { type: 'bill', category: 'electricity' }
             };
         }
@@ -321,372 +343,250 @@ Example: 1234567890`,
             return {
                 message: `💧 *Water Bill Payment*
 
-I can help you pay your water bill.
-
 Please share your *Consumer Number* or *Property ID*.`,
                 structuredData: { type: 'bill', category: 'water' }
             };
         }
+        if (msg.includes('property') || msg.includes('house') || msg.includes('vera') || msg.includes('tax')) {
+            return {
+                message: `🏠 *Property Tax Payment*
+
+Please share your *Census Number* or *Property ID* to check pending dues.`,
+                structuredData: { type: 'bill', category: 'property_tax' }
+            };
+        }
         return {
-            message: `💳 *Bill Payment*
+            message: `💳 *Bill Payment Services*
 
-Which bill would you like to pay?
-
+Select a bill to pay:
 • ⚡ Electricity Bill
 • 💧 Water Bill  
 • 🏠 Property Tax
 
-Please select or type your choice.`
+Using official VMC & Provider Gateways.`
         };
     }
 
-    // Grievance flow
+    // --- Grievance Flow ---
     if (msg.includes('complaint') || msg.includes('problem') || msg.includes('issue') ||
         msg.includes('grievance') || msg.includes('pothole') || msg.includes('road') ||
-        msg.includes('garbage') || msg.includes('kharab') || msg.includes('nahi aa raha')) {
+        msg.includes('garbage') || msg.includes('light') || msg.includes('drain') ||
+        msg.includes('kharab') || msg.includes('nahi aa raha')) {
+
+        const baseGrievancePrompt = (cat: string) => `Please share:
+1. *Area/Ward Name*
+2. *Nearby Landmark*
+3. *Brief Description*
+
+(You will be asked for a photo next)`;
 
         if (msg.includes('road') || msg.includes('pothole') || msg.includes('sadak')) {
             return {
-                message: `🛣️ *Road/Pothole Complaint*
-
-I'm sorry to hear about this issue. I'll help you register a complaint.
-
-Please share:
-1. Your *area/ward name*
-2. *Nearby landmark* (school, temple, etc.)
-3. Brief description of the problem
-
-You can also send a photo of the issue (optional).`,
+                message: `🛣️ *Road Complaint*\n\n` + baseGrievancePrompt('roads'),
                 structuredData: { type: 'grievance', category: 'roads' }
             };
         }
-
         if (msg.includes('water') || msg.includes('paani') || msg.includes('supply')) {
             return {
-                message: `💧 *Water Supply Complaint*
-
-I understand this is inconvenient. Let me help you register a complaint.
-
-Please share:
-1. Your *area/ward name*
-2. *Nearby landmark*
-3. How long has this been happening?`,
+                message: `💧 *Water Supply Complaint*\n\n` + baseGrievancePrompt('water_supply'),
                 structuredData: { type: 'grievance', category: 'water_supply' }
             };
         }
-
-        if (msg.includes('garbage') || msg.includes('kachra') || msg.includes('waste')) {
+        if (msg.includes('garbage') || msg.includes('waste') || msg.includes('kachra')) {
             return {
-                message: `🗑️ *Garbage Collection Complaint*
-
-I'll help you report this issue.
-
-Please share:
-1. Your *area/ward name*
-2. *Street/colony name*
-3. How many days since last collection?`,
+                message: `🗑️ *Garbage Complaint*\n\n` + baseGrievancePrompt('garbage'),
                 structuredData: { type: 'grievance', category: 'garbage' }
+            };
+        }
+        if (msg.includes('light') || msg.includes('street')) {
+            return {
+                message: `💡 *Street Light Complaint*\n\nPlease mention the *Pole Number* if visible.\n\n` + baseGrievancePrompt('street_lights'),
+                structuredData: { type: 'grievance', category: 'street_lights' }
+            };
+        }
+        if (msg.includes('drain') || msg.includes('gutar') || msg.includes('sewer') || msg.includes('overflow')) {
+            return {
+                message: `🌊 *Drainage/Sewerage Complaint*\n\n` + baseGrievancePrompt('drainage'),
+                structuredData: { type: 'grievance', category: 'drainage' }
             };
         }
 
         return {
             message: `📝 *File a Complaint*
 
-I'm here to help! What is your complaint about?
-
-• 💧 Water Supply Issues
+I can help with:
+• 💧 Water Supply
 • 🛣️ Roads / Potholes
-• 🗑️ Garbage Collection
+• 🗑️ Garbage
 • 💡 Street Lights
-• 🌊 Drainage / Flooding
-• 📌 Other Issue
+• 🌊 Drainage
+• 📌 Other Issues
 
-Please select or describe your problem.`
+Please describe your problem.`
         };
     }
 
-    // Certificate flow - INFORMATIONAL ONLY
-    if (msg.includes('certificate') || msg.includes('birth') || msg.includes('income') ||
-        msg.includes('caste') || msg.includes('domicile') || msg.includes('praman patra')) {
+    // --- Certificates ---
+    if (msg.includes('certificate') || msg.includes('birth') || msg.includes('death') || msg.includes('income') ||
+        msg.includes('caste') || msg.includes('domicile') || msg.includes('praman')) {
 
         if (msg.includes('birth') || msg.includes('janam')) {
             return {
-                message: `👶 *Birth Certificate - VMC Guide*
+                message: `👶 *Birth Certificate*
+                
+**Process:**
+1. Apply online (VMC Portal) or at Seva Sadan.
+2. Documents: Discharge summary, Parents' Aadhaar & Marriage Cert.
+3. Fee: ₹20 approx.
+4. Time: 7-15 days.
 
-**How to Apply:**
-1. Visit VMC Online Portal or Seva Sadan Office
-2. Fill application form (Form No. 1)
-3. Submit required documents
-4. Pay fee (₹10-50 depending on timing)
-5. Collect certificate in 7-15 working days
-
-**Required Documents:**
-• Hospital discharge summary / Birth report
-• Parents' Aadhaar cards (both)
-• Parents' marriage certificate
-• Address proof (Ration card / Electricity bill)
-• Affidavit (if registration delayed beyond 1 year)
-
-🔗 **Apply Online:** https://vmc.gov.in/citizen-services
-
-📍 **Offline:** Visit your nearest Seva Sadan or Ward Office` + getFollowUpMenu(lang)
+🔗 [Apply Here](https://vmc.gov.in)` + getFollowUpMenu(lang)
             };
         }
+        if (msg.includes('death') || msg.includes('mrutyu')) {
+            return {
+                message: `⚰️ *Death Certificate*
+                
+**Process:**
+1. Register death within 21 days (Free). 
+2. Apply at Ward Office / Seva Sadan.
+3. Documents: Hospital cause of death, Cremation receipt, ID proof of applicant.
 
+🔗 [VMC Health Dept](https://vmc.gov.in)` + getFollowUpMenu(lang)
+            };
+        }
         if (msg.includes('income') || msg.includes('aay')) {
             return {
-                message: `💰 *Income Certificate - VMC Guide*
+                message: `💰 *Income Certificate* (Revenue Dept)
+                
+Apply via **Digital Gujarat Portal**.
+• Doc: Salary slip / IT Return, Ration Card, Aadhaar.
+• Issued by Mamlatdar (not VMC).
 
-**How to Apply:**
-1. Visit Digital Gujarat Portal or Mamlatdar Office
-2. Fill online application with income details
-3. Submit supporting documents
-4. Verification by Talati/Circle Officer
-5. Certificate issued within 7-15 days
-
-**Required Documents:**
-• Aadhaar Card
-• Salary slips OR Self-declaration (for self-employed)
-• Bank statements (last 6 months)
-• Ration Card
-• Residence proof
-
-🔗 **Apply Online:** https://digitalgujarat.gov.in
-
-📍 **Note:** Income certificates are issued by Revenue Department (Mamlatdar Office), not VMC directly.` + getFollowUpMenu(lang)
+🔗 [Digital Gujarat](https://digitalgujarat.gov.in)` + getFollowUpMenu(lang)
             };
         }
-
-        if (msg.includes('caste') || msg.includes('jati')) {
+        if (msg.includes('domicile') || msg.includes(' रहिवासी')) {
             return {
-                message: `📜 *Caste Certificate - VMC Guide*
+                message: `🏡 *Domicile Certificate*
+                
+Proof of residence in Gujarat for 10+ years.
+• Apply: Digital Gujarat Portal / Police Bhavan.
+• Doc: School LC, Ration Card, Electricity Bill (10 yrs), Voter ID.
 
-**How to Apply:**
-1. Visit Digital Gujarat Portal
-2. Fill Form with caste/community details
-3. Submit required documents
-4. Verification by local authorities
-5. Certificate issued in 15-30 days
-
-**Required Documents:**
-• Aadhaar Card
-• Father's/Grandfather's Caste Certificate
-• School Leaving Certificate
-• Ration Card
-• Residence proof
-• Affidavit (if no prior proof)
-
-🔗 **Apply Online:** https://digitalgujarat.gov.in
-
-📍 **Note:** Caste certificates are issued by Revenue Department, not VMC.` + getFollowUpMenu(lang)
+🔗 [Digital Gujarat](https://digitalgujarat.gov.in)` + getFollowUpMenu(lang)
             };
         }
 
         return {
             message: `📋 *Certificate Services*
 
-Which certificate information do you need?
-
 • 👶 Birth Certificate
+• ⚰️ Death Certificate
 • 💰 Income Certificate
-• 📜 Caste Certificate
 • 🏡 Domicile Certificate
+• 📜 Caste Certificate
 
-Type the certificate name for detailed steps and documents required.
-
-🔗 **VMC Portal:** https://vmc.gov.in`
+Type the name for details.`
         };
     }
 
-    // Status tracking - fetch real data
-    if (msg.includes('status') || msg.includes('track') || msg.match(/gr\d{5}/i) || msg.match(/app\d{5}/i)) {
+    // --- Licenses & Permissions ---
+    if (msg.includes('license') || msg.includes('permit') || msg.includes('shop') || msg.includes('trade') || msg.includes('building') || msg.includes('event')) {
+
+        if (msg.includes('shop') || msg.includes('gumasta')) {
+            return {
+                message: `🏪 *Shop Act / Gumasta License*
+                
+**New Registration:**
+1. Visit VMC Portal > Shop Establishment.
+2. Upload: Rent Agreement/Ownership, PAN, Aadhaar.
+3. Pay Fee based on employee count.
+
+🔗 [VMC Shop Dept](https://vmc.gov.in)` + getFollowUpMenu(lang)
+            };
+        }
+        if (msg.includes('event') || msg.includes('party') || msg.includes('plot')) {
+            return {
+                message: `🎉 *Event / Plot Booking*
+                
+For Community Halls or Party Plots:
+1. Check availability on VMC Portal.
+2. Select date & venue.
+3. Pay deposit & rent online.
+4. Get confirmation receipt.
+
+🔗 [Book Venue](https://vmc.gov.in)` + getFollowUpMenu(lang)
+            };
+        }
+
+        return {
+            message: `🏪 *Licenses & Permissions*
+
+• Shop Act (Gumasta)
+• Trade License
+• Building Permission
+• Event/Plot Booking
+• Food License (FSSAI)
+
+What do you need?`
+        };
+    }
+
+    // --- Status Tracking ---
+    if (msg.includes('status') || msg.includes('track') || msg.includes('application') || msg.match(/gr\d{5}/i) || msg.match(/app\d{5}/i)) {
         const grMatch = msg.match(/gr(\d{5})/i);
         const appMatch = msg.match(/app(\d{5})/i);
 
         if (grMatch) {
             const id = `GR${grMatch[1]}`;
-            // Return structured data to trigger real lookup in chatService
             return {
-                message: `🔍 Looking up grievance **${id}**...`,
+                message: `🔍 Checking status for Grievance **${id}**...`,
                 structuredData: { type: 'status_query', grievance_id: id }
             };
         }
-
         if (appMatch) {
             const id = `APP${appMatch[1]}`;
-            // Return structured data to trigger real lookup in chatService
             return {
-                message: `🔍 Looking up application **${id}**...`,
+                message: `🔍 Checking status for Application **${id}**...`,
                 structuredData: { type: 'status_query', application_id: id }
             };
         }
 
         return {
-            message: `🔍 *Track Your Request*
+            message: `🔍 *Track Request*
 
-Please share your:
-• *Grievance ID* (e.g., GR00123) or
-• *Application ID* (e.g., APP00456)
-
-You received this ID when you filed your request.`
+Please enter your **Grievance ID** (GRxxxxx) or **Application ID** (APPxxxxx) to check status.`
         };
     }
 
-    // Office info - VMC SPECIFIC
-    if (msg.includes('office') || msg.includes('timing') || msg.includes('contact') || msg.includes('phone') || msg.includes('address') || msg.includes('vmc')) {
+    // --- General / Office ---
+    if (msg.includes('office') || msg.includes('contact') || msg.includes('time') || msg.includes('help')) {
         return {
-            message: `🏛️ *VMC Office Information*
+            message: `🏛️ *VMC Contact Info*
 
-🕐 *Timings:*
-Monday to Saturday: 10:30 AM - 6:10 PM
-Sunday: Closed
+☎️ *Helpline:* 1800-233-0265 (Toll Free)
+📞 *Control Room:* 0265-2423101
+📧 *Email:* info@vmc.gov.in
 
-📞 *Contact:*
-Helpline: 155303 / 0265-2438888
-Control Room: 0265-2428888
-Email: commissioner@vmc.gov.in
+🕒 *Timings:* 10:30 AM - 6:10 PM (Mon-Sat, excluding holidays)
+📍 *Head Office:* Khanderao Market, Vadodara.
 
-📍 *Head Office:*
-Vadodara Municipal Corporation
-Khanderao Market, Raopura, Vadodara - 390001
-
-🔗 **Website:** https://vmc.gov.in
-
-Is there anything specific you'd like to know?` + getFollowUpMenu(lang)
+How can I assist you today?` + getFollowUpMenu(lang)
         };
     }
 
-    // License applications - INFORMATIONAL ONLY
-    if (msg.includes('license') || msg.includes('permit') || msg.includes('shop') || msg.includes('trade') || msg.includes('building')) {
-
-        if (msg.includes('shop') || msg.includes('business') || msg.includes('dukan')) {
-            return {
-                message: `🏪 *Shop/Business License - VMC Guide*
-
-**How to Apply:**
-1. Visit VMC Online Portal or Zone Office
-2. Submit application with required documents
-3. Pay applicable fees
-4. Inspection by VMC officials
-5. License issued within 15-30 days
-
-**Required Documents:**
-• Aadhaar Card & PAN Card
-• Shop/Business address proof
-• Property ownership/Rent agreement
-• Passport-size photos (2)
-• NOC from Fire Department (if applicable)
-• GST registration (if applicable)
-
-**Fees:** Varies by shop size and location
-
-🔗 **Apply Online:** https://vmc.gov.in/citizen-services
-
-📍 **Offline:** Visit your Zone Office with documents` + getFollowUpMenu(lang)
-            };
-        }
-
-        if (msg.includes('trade')) {
-            return {
-                message: `📜 *Trade License - VMC Guide*
-
-**How to Apply:**
-1. Visit VMC Online Portal
-2. Fill trade license application
-3. Submit required documents
-4. Pay trade license fee
-5. License issued after verification
-
-**Required Documents:**
-• Aadhaar Card & PAN Card
-• Business address proof
-• Partnership deed / Company registration (if applicable)
-• GST registration
-• Previous year's license (for renewal)
-
-**Renewal:** Must renew annually before March 31
-
-🔗 **Apply Online:** https://vmc.gov.in/citizen-services
-
-📍 **Offline:** Visit Revenue Department, VMC Head Office` + getFollowUpMenu(lang)
-            };
-        }
-
-        if (msg.includes('building') || msg.includes('construction')) {
-            return {
-                message: `🏗️ *Building Permission - VMC Guide*
-
-**How to Apply:**
-1. Submit application on VMC Portal
-2. Upload building plans (prepared by licensed architect)
-3. Pay scrutiny fees
-4. Site inspection by VMC
-5. Permission granted after compliance check
-
-**Required Documents:**
-• Property ownership documents (7/12, Sale deed)
-• Building plan by licensed architect
-• Structural engineer certificate
-• NOCs (Fire, Environment, if applicable)
-• Fees challan
-
-**Timeline:** 30-60 days (depends on project size)
-
-🔗 **Apply Online:** https://vmc.gov.in/building-permission
-
-📍 **Important:** All building work requires VMC permission!` + getFollowUpMenu(lang)
-            };
-        }
-
-        return {
-            message: `📋 *License & Permit Services - VMC*
-
-Which license/permit information do you need?
-
-• 🏪 Shop / Business License
-• 📜 Trade License
-• �️ Building Permission
-• 🎉 Event Permission
-
-Type the license name for detailed steps and documents.
-
-🔗 **VMC Portal:** https://vmc.gov.in`
-        };
-    }
-
-    // Default / greeting
-    if (msg.includes('hello') || msg.includes('hi') || msg.includes('namaste') || msg.includes('help') || msg.length < 10) {
-        return {
-            message: `🙏 * Namaste! Welcome to Citizen Services! *
-
-        I'm your virtual assistant. How can I help you today?
-
-📄 * Pay Bills * - Electricity, Water, Property Tax
-📝 * File Complaints * - Roads, Water, Garbage, Lights
-📋 * Apply for Certificates * - Birth, Income, Caste
-🏪 * Get Licenses * - Shop, Trade, Permits
-🔍 * Track Status * - Check your request status
-    ℹ️ * Office Info * - Timings, Contacts
-
-Just type what you need or select from above!
-
-_आप हिंदी में भी बात कर सकते हैं।_ 🇮🇳`
-        };
-    }
-
-    // Fallback
+    // --- Default Fallback ---
     return {
-        message: `I understand you need help with: "${userMessage}"
+        message: `👋 *Welcome to VMC Citizen Services*
 
-Could you please specify what service you need ?
+I can help you with:
+1. 💳 *Pay Bills* (Water, Housing, Tax)
+2. 📝 *Register Complaint* (Road, Garbage, Drain)
+3. 📋 *Certificates* (Birth, Death, Income)
+4. 🏪 *Licenses* (Shop, Trade)
+5. 🔍 *Check Status*
 
-• 💳 Bill Payment
-• 📝 File a Complaint
-• 📋 Certificate Application
-• 🏪 License / Permit
-• 🔍 Track Status
-• ℹ️ General Information
-
-Or describe your issue in more detail, and I'll guide you through the process.`
+Please type your request (e.g., "Report a pothole" or "Pay water bill").`
     };
 }

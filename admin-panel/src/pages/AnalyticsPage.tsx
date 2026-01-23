@@ -5,8 +5,8 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
-    getAnalyticsKPIs, getConversationVolume, getCategoryBreakdown,
-    getStatusBreakdown, getPeakUsageHeatmap, getTopIntents,
+    fetchAnalyticsData, calculateAnalyticsKPIs, calculateConversationVolume, calculateCategoryBreakdown,
+    calculateStatusBreakdown, calculatePeakUsageHeatmap, calculateTopIntents,
     type AnalyticsFilters, type KPIData, type TimeSeriesPoint,
     type CategoryBreakdown, type StatusBreakdown,
     type HeatmapCell, type TopIntent
@@ -120,21 +120,17 @@ export const AnalyticsPage: React.FC = () => {
     const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [kpiData, volume, categories, statuses, heatmap, intents] = await Promise.all([
-                getAnalyticsKPIs(filters),
-                getConversationVolume(filters),
-                getCategoryBreakdown(filters),
-                getStatusBreakdown(filters),
-                getPeakUsageHeatmap(filters),
-                getTopIntents(filters),
-            ]);
+            // optimized: single fetch
+            const { current, previous } = await fetchAnalyticsData(filters);
 
-            setKpis(kpiData);
-            setVolumeData(volume);
-            setCategoryData(categories);
-            setStatusData(statuses);
-            setHeatmapData(heatmap);
-            setTopIntents(intents);
+            // synchronous calculations
+            setKpis(calculateAnalyticsKPIs(current, previous));
+            setVolumeData(calculateConversationVolume(current, filters));
+            setCategoryData(calculateCategoryBreakdown(current));
+            setStatusData(calculateStatusBreakdown(current));
+            setHeatmapData(calculatePeakUsageHeatmap(current));
+            setTopIntents(calculateTopIntents(current));
+
         } catch (error) {
             console.error('Error loading analytics:', error);
         } finally {

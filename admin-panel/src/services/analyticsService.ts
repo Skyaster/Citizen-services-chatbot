@@ -9,6 +9,18 @@ export interface AnalyticsFilters {
     status?: string;
 }
 
+export interface AnalyticsRawData {
+    id: string;
+    citizen_id: string;
+    status: string;
+    category: string;
+    sub_category?: string;
+    channel: string;
+    created_at: string;
+    resolved_at?: string;
+    sla_due_at?: string;
+}
+
 export interface KPIData {
     totalConversations: number;
     uniqueCitizens: number;
@@ -61,49 +73,67 @@ export interface TopIntent {
     resolutionRate: number;
 }
 
-// Get KPI metrics for dashboard cards
-export async function getAnalyticsKPIs(filters: AnalyticsFilters): Promise<KPIData> {
-    const { startDate, endDate, channel, category } = filters;
+/**
+ * Fetch all analytics data in a single request (optimized)
+ * Returns raw data for current period and previous period (for trends)
+ */
+export async function fetchAnalyticsData(filters: AnalyticsFilters): Promise<{
+    current: AnalyticsRawData[];
+    previous: AnalyticsRawData[];
+}> {
+    const { startDate, endDate, channel, category, status } = filters;
 
-    // Calculate previous period for trend comparison
+    // Calculate previous period
     const startDateObj = new Date(startDate);
     const endDateObj = new Date(endDate);
     const periodDays = Math.ceil((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
     const prevStartDate = new Date(startDateObj.getTime() - periodDays * 24 * 60 * 60 * 1000).toISOString();
     const prevEndDate = startDate;
 
-    // Current period query
-    let query = supabase
+    // Build Current Period Query
+    let currentQuery = supabase
         .from('service_requests')
-        .select('id, citizen_id, status, created_at, resolved_at, sla_due_at', { count: 'exact' })
+        .select('id, citizen_id, status, category, sub_category, channel, created_at, resolved_at, sla_due_at')
         .gte('created_at', startDate)
         .lte('created_at', endDate);
 
-    if (channel) query = query.eq('channel', channel);
-    if (category) query = query.eq('category', category);
+    if (channel) currentQuery = currentQuery.eq('channel', channel);
+    if (category) currentQuery = currentQuery.eq('category', category);
+    if (status) currentQuery = currentQuery.eq('status', status);
 
-    const { data: currentData, count: totalCount } = await query;
-
-    // Previous period query for trends
+    // Build Previous Period Query
     let prevQuery = supabase
         .from('service_requests')
-        .select('id, status', { count: 'exact' })
+        .select('id, status, created_at') // Minimal fields for trend calc
         .gte('created_at', prevStartDate)
         .lt('created_at', prevEndDate);
 
     if (channel) prevQuery = prevQuery.eq('channel', channel);
     if (category) prevQuery = prevQuery.eq('category', category);
+    if (status) prevQuery = prevQuery.eq('status', status);
 
-    const { data: prevData, count: prevTotal } = await prevQuery;
+    // Execute in parallel
+    const [currentRes, prevRes] = await Promise.all([currentQuery, prevQuery]);
 
-    // Calculate metrics
-    const records = currentData || [];
-    const uniqueCitizens = new Set(records.map(r => r.citizen_id)).size;
-    const resolvedRecords = records.filter(r => r.status === 'resolved' || r.status === 'closed');
-    const pendingRecords = records.filter(r => ['new', 'in_progress', 'under_review'].includes(r.status));
-    const overdueRecords = records.filter(r => r.sla_due_at && new Date(r.sla_due_at) < new Date());
+    if (currentRes.error) console.error('Error fetching current analytics:', currentRes.error);
+    if (prevRes.error) console.error('Error fetching previous analytics:', prevRes.error);
 
-    // Average resolution time (in hours)
+    return {
+        current: (currentRes.data as AnalyticsRawData[]) || [],
+        previous: (prevRes.data as AnalyticsRawData[]) || []
+    };
+}
+
+// Recalculate KPI metrics from raw data (Sync)
+export function calculateAnalyticsKPIs(currentData: AnalyticsRawData[], previousData: AnalyticsRawData[]): KPIData {
+    // Current stats
+    const totalConversations = currentData.length;
+    const uniqueCitizens = new Set(currentData.map(r => r.citizen_id)).size;
+    const resolvedRecords = currentData.filter(r => r.status === 'resolved' || r.status === 'closed');
+    const pendingRecords = currentData.filter(r => ['new', 'in_progress', 'under_review'].includes(r.status));
+    const overdueRecords = currentData.filter(r => r.sla_due_at && new Date(r.sla_due_at) < new Date());
+
+    // Average resolution time
     let totalResolutionHours = 0;
     let resolutionCount = 0;
     resolvedRecords.forEach(r => {
@@ -114,44 +144,33 @@ export async function getAnalyticsKPIs(filters: AnalyticsFilters): Promise<KPIDa
         }
     });
 
-    const prevRecords = prevData || [];
-    const prevResolved = prevRecords.filter(r => r.status === 'resolved' || r.status === 'closed').length;
+    // Previous stats
+    const prevTotal = previousData.length;
+    const prevResolved = previousData.filter(r => r.status === 'resolved' || r.status === 'closed').length;
 
     return {
-        totalConversations: totalCount || 0,
+        totalConversations,
         uniqueCitizens,
         resolvedCount: resolvedRecords.length,
-        resolutionRate: totalCount ? (resolvedRecords.length / totalCount) * 100 : 0,
+        resolutionRate: totalConversations ? (resolvedRecords.length / totalConversations) * 100 : 0,
         avgResolutionHours: resolutionCount ? totalResolutionHours / resolutionCount : 0,
         overdueCount: overdueRecords.length,
-        overdueRate: totalCount ? (overdueRecords.length / totalCount) * 100 : 0,
+        overdueRate: totalConversations ? (overdueRecords.length / totalConversations) * 100 : 0,
         pendingCount: pendingRecords.length,
         previousPeriod: {
-            totalConversations: prevTotal || 0,
+            totalConversations: prevTotal,
             resolvedCount: prevResolved,
         },
     };
 }
 
-// Get conversation volume over time
-export async function getConversationVolume(filters: AnalyticsFilters): Promise<TimeSeriesPoint[]> {
-    const { startDate, endDate, channel, category } = filters;
-
-    let query = supabase
-        .from('service_requests')
-        .select('created_at')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
-        .order('created_at', { ascending: true });
-
-    if (channel) query = query.eq('channel', channel);
-    if (category) query = query.eq('category', category);
-
-    const { data } = await query;
+// Calculate conversation volume (Sync)
+export function calculateConversationVolume(data: AnalyticsRawData[], filters: AnalyticsFilters): TimeSeriesPoint[] {
+    const { startDate, endDate } = filters;
 
     // Group by date
     const dateMap = new Map<string, number>();
-    (data || []).forEach(record => {
+    data.forEach(record => {
         const date = new Date(record.created_at).toISOString().split('T')[0];
         dateMap.set(date, (dateMap.get(date) || 0) + 1);
     });
@@ -172,27 +191,15 @@ export async function getConversationVolume(filters: AnalyticsFilters): Promise<
     return result;
 }
 
-// Get breakdown by category
-export async function getCategoryBreakdown(filters: AnalyticsFilters): Promise<CategoryBreakdown[]> {
-    const { startDate, endDate, channel } = filters;
-
-    let query = supabase
-        .from('service_requests')
-        .select('category')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
-
-    if (channel) query = query.eq('channel', channel);
-
-    const { data } = await query;
-
+// Calculate category breakdown (Sync)
+export function calculateCategoryBreakdown(data: AnalyticsRawData[]): CategoryBreakdown[] {
     const categoryMap = new Map<string, number>();
-    (data || []).forEach(record => {
+    data.forEach(record => {
         const cat = record.category || 'unknown';
         categoryMap.set(cat, (categoryMap.get(cat) || 0) + 1);
     });
 
-    const total = data?.length || 1;
+    const total = data.length || 1;
     return Array.from(categoryMap.entries()).map(([category, count]) => ({
         category: category.charAt(0).toUpperCase() + category.slice(1),
         count,
@@ -200,27 +207,15 @@ export async function getCategoryBreakdown(filters: AnalyticsFilters): Promise<C
     }));
 }
 
-// Get breakdown by channel
-export async function getChannelBreakdown(filters: AnalyticsFilters): Promise<ChannelBreakdown[]> {
-    const { startDate, endDate, category } = filters;
-
-    let query = supabase
-        .from('service_requests')
-        .select('channel')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
-
-    if (category) query = query.eq('category', category);
-
-    const { data } = await query;
-
+// Calculate channel breakdown (Sync)
+export function calculateChannelBreakdown(data: AnalyticsRawData[]): ChannelBreakdown[] {
     const channelMap = new Map<string, number>();
-    (data || []).forEach(record => {
+    data.forEach(record => {
         const ch = record.channel || 'unknown';
         channelMap.set(ch, (channelMap.get(ch) || 0) + 1);
     });
 
-    const total = data?.length || 1;
+    const total = data.length || 1;
     return Array.from(channelMap.entries()).map(([channel, count]) => ({
         channel: channel.charAt(0).toUpperCase() + channel.slice(1),
         count,
@@ -228,28 +223,15 @@ export async function getChannelBreakdown(filters: AnalyticsFilters): Promise<Ch
     }));
 }
 
-// Get breakdown by status
-export async function getStatusBreakdown(filters: AnalyticsFilters): Promise<StatusBreakdown[]> {
-    const { startDate, endDate, channel, category } = filters;
-
-    let query = supabase
-        .from('service_requests')
-        .select('status')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
-
-    if (channel) query = query.eq('channel', channel);
-    if (category) query = query.eq('category', category);
-
-    const { data } = await query;
-
+// Calculate status breakdown (Sync)
+export function calculateStatusBreakdown(data: AnalyticsRawData[]): StatusBreakdown[] {
     const statusMap = new Map<string, number>();
-    (data || []).forEach(record => {
+    data.forEach(record => {
         const st = record.status || 'unknown';
         statusMap.set(st, (statusMap.get(st) || 0) + 1);
     });
 
-    const total = data?.length || 1;
+    const total = data.length || 1;
     const statusLabels: Record<string, string> = {
         new: 'New',
         in_progress: 'In Progress',
@@ -266,25 +248,12 @@ export async function getStatusBreakdown(filters: AnalyticsFilters): Promise<Sta
     }));
 }
 
-// Get peak usage heatmap (hour x day of week)
-export async function getPeakUsageHeatmap(filters: AnalyticsFilters): Promise<HeatmapCell[]> {
-    const { startDate, endDate, channel, category } = filters;
-
-    let query = supabase
-        .from('service_requests')
-        .select('created_at')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
-
-    if (channel) query = query.eq('channel', channel);
-    if (category) query = query.eq('category', category);
-
-    const { data } = await query;
-
+// Calculate heatmap (Sync)
+export function calculatePeakUsageHeatmap(data: AnalyticsRawData[]): HeatmapCell[] {
     // Initialize matrix
     const matrix: number[][] = Array(7).fill(null).map(() => Array(24).fill(0));
 
-    (data || []).forEach(record => {
+    data.forEach(record => {
         const date = new Date(record.created_at);
         const day = date.getDay(); // 0-6
         const hour = date.getHours(); // 0-23
@@ -302,24 +271,11 @@ export async function getPeakUsageHeatmap(filters: AnalyticsFilters): Promise<He
     return cells;
 }
 
-// Get top intents (most common sub_categories)
-export async function getTopIntents(filters: AnalyticsFilters, limit: number = 10): Promise<TopIntent[]> {
-    const { startDate, endDate, channel, category } = filters;
-
-    let query = supabase
-        .from('service_requests')
-        .select('category, sub_category, status')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
-
-    if (channel) query = query.eq('channel', channel);
-    if (category) query = query.eq('category', category);
-
-    const { data } = await query;
-
+// Calculate top intents (Sync)
+export function calculateTopIntents(data: AnalyticsRawData[], limit: number = 10): TopIntent[] {
     const intentMap = new Map<string, { category: string; count: number; resolved: number }>();
 
-    (data || []).forEach(record => {
+    data.forEach(record => {
         const key = record.sub_category || 'General';
         const existing = intentMap.get(key) || { category: record.category, count: 0, resolved: 0 };
         existing.count++;
@@ -340,3 +296,4 @@ export async function getTopIntents(filters: AnalyticsFilters, limit: number = 1
         .sort((a, b) => b.count - a.count)
         .slice(0, limit);
 }
+

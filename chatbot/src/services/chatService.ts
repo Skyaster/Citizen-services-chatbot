@@ -271,10 +271,11 @@ _Data from VMC database_`;
 _Data from VMC database_`;
                 }
             }
-        } else if (action && !action.success && mergedData?.type === 'status_query') {
-            // Handle not found case
-            const id = mergedData.grievance_id || mergedData.application_id;
-            botMessage.content = `❌ *Request Not Found*
+        } else if (action && !action.success) {
+            if (mergedData?.type === 'status_query') {
+                // Handle not found case for status
+                const id = mergedData.grievance_id || mergedData.application_id;
+                botMessage.content = `❌ *Request Not Found*
 
 We couldn't find any record with ID: **${id}**
 
@@ -283,6 +284,19 @@ Please check:
 • You received this ID when filing your request
 
 If you recently filed a complaint, it may take a few minutes to appear in the system.`;
+            } else if (mergedData?.type === 'bill') {
+                // Handle bill not found
+                const consumerNumber = mergedData.consumer_number;
+                botMessage.content = `❌ *Bill Not Found*
+
+We couldn't find any bill details for Consumer Number: **${consumerNumber}**
+
+Please check:
+• The Consumer Number is correct
+• You have selected the correct service (Property Tax / Water Tax)
+
+Try entering the number again or contact VMC support.`;
+            }
         }
     }
 
