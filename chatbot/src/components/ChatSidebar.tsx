@@ -1,6 +1,13 @@
 // WhatsApp Web Sidebar - VMC Chatbot with Filter Tabs
 import React, { useState } from 'react';
 
+// Tick Icon SVG
+const TickIcon = () => (
+    <svg viewBox="0 0 16 11" width="16" height="11" fill="currentColor">
+        <path d="M4 10.5L.5 7l1.5-1.5L4 7.5l8-8L13.5 1 4 10.5z" />
+    </svg>
+);
+
 export const ChatSidebar: React.FC = () => {
     const [activeFilter, setActiveFilter] = useState('all');
 
@@ -66,7 +73,11 @@ export const ChatSidebar: React.FC = () => {
                         </div>
                         <div className="chat-bottom-row">
                             <span className="chat-preview">
-                                <span className="tick">✓✓</span> How can I help you today?
+                                <span className="status-icon read" style={{ marginRight: '4px', marginLeft: 0 }}>
+                                    <TickIcon />
+                                    <TickIcon />
+                                </span>
+                                How can I help you today?
                             </span>
                         </div>
                     </div>

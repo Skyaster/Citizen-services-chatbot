@@ -1,8 +1,9 @@
 // Grievance Service - CRUD operations for grievances
 
 import { supabase, isDemoMode } from './supabase';
-import type { Grievance, GrievanceStatus } from '../types';
+import type { Grievance, GrievanceStatus, Attachment } from '../types';
 import { generateGrievanceId } from '../utils/helpers';
+
 
 // Demo storage for mock mode
 const demoGrievances: Map<string, Grievance> = new Map();
@@ -18,6 +19,7 @@ export async function createGrievance(data: {
     location: string;
     landmark?: string;
     photo_url?: string;
+    attachments?: Attachment[];
 }): Promise<{ success: boolean; grievance_id?: string; error?: string }> {
     const grievance_id = generateGrievanceId();
 
@@ -25,7 +27,7 @@ export async function createGrievance(data: {
     const citizenId = data.citizen_id || '00000000-0000-0000-0000-000000000000';
 
     if (isDemoMode) {
-        // ... demo code ...\
+        // ... demo code ...
         const grievance: Grievance = {
             id: demoGrievances.size + 1,
             grievance_id,
@@ -36,6 +38,7 @@ export async function createGrievance(data: {
             location: data.location,
             landmark: data.landmark,
             photo_url: data.photo_url,
+            attachments: data.attachments, // Store attachments in demo mode
             status: 'New',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -58,7 +61,7 @@ export async function createGrievance(data: {
             grievance_id: grievance_id
         };
 
-        console.log('📤 Inserting service request:', { citizenId, category: data.category, description: data.description });
+        console.log('📤 Inserting service request with attachments:', { citizenId, category: data.category, attachments: data.attachments?.length });
 
         const { error: adminError } = await supabase
             .from('service_requests')
@@ -72,6 +75,7 @@ export async function createGrievance(data: {
                 department: getDepartmentForCategory(data.category),
                 description: data.description,
                 metadata: metadata,
+                attachments: data.attachments || [], // Store attachments in DB
                 sla_due_at: slaDueAt.toISOString()
             });
 

@@ -132,6 +132,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled = f
     const attachmentRef = useRef<HTMLDivElement>(null);
     const recognitionRef = useRef<SpeechRecognition | null>(null);
 
+    // File input refs
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const mediaInputRef = useRef<HTMLInputElement>(null);
+    const cameraInputRef = useRef<HTMLInputElement>(null);
+
     // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
@@ -182,9 +187,48 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled = f
     };
 
     const handleAttachmentOption = (type: string) => {
-        console.log(`Selected attachment type: ${type}`);
         setShowAttachmentMenu(false);
-        // TODO: Implement actual file handling
+        switch (type) {
+            case 'document':
+                fileInputRef.current?.click();
+                break;
+            case 'photos':
+                mediaInputRef.current?.click();
+                break;
+            case 'camera':
+                cameraInputRef.current?.click();
+                break;
+            case 'contact':
+                // Simulate sending a contact
+                onSend('👤 Contact: VMC Support (+91 1800 123 4567)');
+                break;
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+                const base64 = event.target?.result as string;
+                if (base64) {
+                    if (type === 'document') {
+                        const size = (file.size / 1024).toFixed(1);
+                        // Format: [ATTACHMENT: document] base64 | filename | size
+                        onSend(`[ATTACHMENT: document] ${base64} | ${file.name} | ${size} KB`);
+                    } else if (type === 'media' || type === 'camera') {
+                        const fileType = file.type.startsWith('video') ? 'video' : 'image';
+                        // Format: [ATTACHMENT: image] base64 | filename | size
+                        onSend(`[ATTACHMENT: ${fileType}] ${base64} | ${file.name}`);
+                    }
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+        // Reset so same file can be selected again if needed
+        e.target.value = '';
     };
 
     // Dictation Logic (Speech-to-Text)
@@ -252,6 +296,33 @@ export const MessageInput: React.FC<MessageInputProps> = ({ onSend, disabled = f
 
     return (
         <div className="chat-input-container">
+            {/* Hidden File Inputs */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                style={{ display: 'none' }}
+                accept=".pdf,.doc,.docx,.txt,.ppt,.pptx,.xls,.xlsx"
+                onChange={(e) => handleFileSelect(e, 'document')}
+            />
+            <input
+                type="file"
+                ref={mediaInputRef}
+                className="hidden"
+                style={{ display: 'none' }}
+                accept="image/*,video/*"
+                onChange={(e) => handleFileSelect(e, 'media')}
+            />
+            <input
+                type="file"
+                ref={cameraInputRef}
+                className="hidden"
+                style={{ display: 'none' }}
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handleFileSelect(e, 'camera')}
+            />
+
             {/* Plus/Attachment Button */}
             <div className="attachment-container" ref={attachmentRef}>
                 <button

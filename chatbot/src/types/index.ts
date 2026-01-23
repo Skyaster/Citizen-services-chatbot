@@ -18,6 +18,14 @@ export interface Message {
     structuredData?: StructuredData;
 }
 
+export interface Attachment {
+    id: string;
+    url: string;
+    name: string;
+    size: number;
+    type: string;
+}
+
 export interface StructuredData {
     type: 'grievance' | 'application' | 'bill' | 'status_query' | 'info';
     category?: string;
@@ -31,7 +39,8 @@ export interface StructuredData {
     consumer_number?: string;
     application_id?: string;
     grievance_id?: string;
-    [key: string]: string | undefined;
+    attachments?: Attachment[];
+    [key: string]: string | number | boolean | undefined | Attachment[];
 }
 
 export interface Grievance {
@@ -44,6 +53,7 @@ export interface Grievance {
     location: string;
     landmark?: string;
     photo_url?: string;
+    attachments?: Attachment[];
     status: GrievanceStatus;
     created_at: string;
     updated_at: string;

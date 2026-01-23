@@ -219,39 +219,86 @@ Jo chahiye woh type karein!`;
     }
 
     if (context.currentFlow === 'grievance' && context.collectedData?.category) {
+        const data = context.collectedData;
+
         // Step 2: Collect Location (if not yet collected)
-        if (!context.collectedData.location) {
+        if (!data.location) {
             const locationMsg = lang === 'hi'
-                ? `ठीक है। कृपया समस्या का संक्षिप्त विवरण दें।`
+                ? `जी। कृपया पता और नजदीकी लैंडमार्क दर्ज करें।`
                 : lang === 'hinglish'
-                    ? `Theek hai. Please issue ka brief description dein.`
-                    : `Got it. Please briefly describe the problem.`;
+                    ? `Ok. Please enter your Address and nearby Landmark.`
+                    : `Got it. Please share your **Address** and **Nearby Landmark**.`;
 
             return {
                 message: locationMsg,
                 structuredData: {
                     type: 'grievance', // Keep in grievance flow
-                    category: context.collectedData.category,
+                    category: data.category as string,
                     location: userMessage // Identify this user message as the location
                 }
             };
         }
 
-        // Step 3: Collect Description (if location is present)
-        // At this point we have category and location (from context), so this message is the description
-        const grievanceMsg = lang === 'hi'
-            ? `धन्यवाद। मैंने नोट कर लिया है। आपकी शिकायत प्रोसेस हो रही है...`
+        // Step 3: Collect Description (if location is present but description is missing)
+        // Note: In the previous step, we assigned userMessage to location.
+        // But if we are here, it means location was ALREADY in context.
+        // So the CURRENT userMessage is the description.
+        if (!data.description) {
+            const descMsg = lang === 'hi'
+                ? `धन्यवाद। कृपया समस्या का विवरण दें (फोटो अगला है)।`
+                : lang === 'hinglish'
+                    ? `Note kar liya. Please problem describe karein (photo next step mein).`
+                    : `Noted. Please briefly **describe the problem** (You'll be asked for a photo next).`;
+
+            return {
+                message: descMsg,
+                structuredData: {
+                    type: 'grievance',
+                    category: data.category as string,
+                    location: data.location as string,
+                    description: userMessage
+                }
+            };
+        }
+
+        // Step 4: Mandatory Photo (if description is present but no attachment)
+        // We check if the CURRENT message has an attachment OR if context already has one.
+        const hasAttachment = userMessage.startsWith('[ATTACHMENT:') || (data.attachments && data.attachments.length > 0);
+
+        if (!hasAttachment) {
+            const photoMsg = lang === 'hi'
+                ? `🛑 **फोटो अनिवार्य है**\n\nकृपया समस्या की फोटो भेजें। इसके बिना हम शिकायत दर्ज नहीं कर सकते।`
+                : lang === 'hinglish'
+                    ? `🛑 **Photo Mandatory hai**\n\nPlease issue ka photo bhejein. Uske bina complaint register nahi hogi.`
+                    : `🛑 **Photo Required**\n\nPlease attach a **photo** of the issue.\nWe cannot register the complaint without it.`;
+
+            return {
+                message: photoMsg,
+                // We return the same data so we stay in this state
+                structuredData: {
+                    type: 'grievance',
+                    category: data.category as string,
+                    location: data.location as string,
+                    description: data.description as string
+                }
+            };
+        }
+
+        // All steps complete
+        const finalMsg = lang === 'hi'
+            ? `धन्यवाद। मैंने फोटो प्राप्त कर लिया है। आपकी शिकायत दर्ज की जा रही है...`
             : lang === 'hinglish'
-                ? `Thank you. Maine note kar liya hai. Aapki complaint process ho rahi hai...`
-                : `Thank you. I've noted that. Processing your complaint...`;
+                ? `Thank you. Photo mil gaya. Complaint register ho rahi hai...`
+                : `Thank you. I've received the photo. Registering your complaint now...`;
 
         return {
-            message: grievanceMsg,
+            message: finalMsg,
             structuredData: {
                 type: 'grievance',
-                category: context.collectedData.category,
-                location: context.collectedData.location,
-                description: userMessage
+                category: data.category as string,
+                location: data.location as string,
+                description: data.description as string,
+                // The attachment is handled by chatService, but we confirm flow is done
             }
         };
     }

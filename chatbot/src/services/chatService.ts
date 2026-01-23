@@ -44,9 +44,11 @@ function getFlowFromType(type: string): ConversationContext['currentFlow'] {
     }
 }
 
-function shouldExecuteAction(data: Record<string, string>): boolean {
+function shouldExecuteAction(data: Record<string, string>, context?: ConversationContext): boolean {
     if (data.type === 'grievance' && data.category && data.description && (data.area || data.location)) {
-        return true;
+        // Validation: Must have at least one attachment for grievances
+        const attachments = context?.collectedData?.attachments || [];
+        return attachments.length > 0;
     }
     if (data.type === 'status_query' && (data.grievance_id || data.application_id)) {
         return true;
@@ -67,7 +69,8 @@ async function executeAction(data: Record<string, string>): Promise<ActionResult
                         category: data.category,
                         description: data.description,
                         location: location,
-                        landmark: data.landmark
+                        landmark: data.landmark,
+                        attachments: (data as any).attachments
                     });
                     return {
                         type: 'grievance_created',
@@ -133,8 +136,31 @@ export async function processMessage(
     context: ConversationContext
 ): Promise<{ botMessage: Message; newContext: ConversationContext; action?: ActionResult }> {
 
+    // Check for attachment in user message
+    let attachmentData = null;
+    let cleanUserMessage = userMessage;
+
+    if (userMessage.startsWith('[ATTACHMENT:')) {
+        // Parse format: [ATTACHMENT: type] base64 | filename | size
+        const matches = userMessage.match(/\[ATTACHMENT: (\w+)\] (.*?) \| (.*?)($| \| (.*))/);
+        if (matches) {
+            const [_, type, url, name, __, sizeStr] = matches;
+            attachmentData = {
+                id: generateMessageId(),
+                type,
+                url,
+                name,
+                size: sizeStr ? parseFloat(sizeStr) : 0
+            };
+
+            // Reformat message for display
+            cleanUserMessage = `${type === 'document' ? '📄' : (type === 'video' ? '🎥' : '📷')} Sent ${type}: ${name}`;
+        }
+    }
+
     // Get response from Gemini or demo mode
-    const response = await sendToGemini(userMessage, currentMessages, context);
+    // We pass the clean message to Gemini so it understands the user sent a file
+    const response = await sendToGemini(cleanUserMessage, currentMessages, context);
 
     // Parse any structured data
     const { message: cleanMessage, structuredData } = parseStructuredData(response.message);
@@ -165,6 +191,15 @@ export async function processMessage(
         }
     };
 
+    // If we have an attachment, add it to collectedData
+    if (attachmentData) {
+        const existingAttachments = newContext.collectedData?.attachments || [];
+        newContext.collectedData = {
+            ...newContext.collectedData,
+            attachments: [...existingAttachments, attachmentData]
+        };
+    }
+
     // Detect flow from response
     if (mergedData?.type) {
         newContext.currentFlow = getFlowFromType(mergedData.type);
@@ -178,9 +213,16 @@ export async function processMessage(
     // Execute any required actions based on structured data
     let action: ActionResult | undefined;
     console.log('Merged Data:', mergedData);
-    if (mergedData && shouldExecuteAction(mergedData)) {
+    if (mergedData && shouldExecuteAction(mergedData, newContext)) {
         console.log('Executing action for:', mergedData.type);
-        action = await executeAction(mergedData);
+
+        // Pass attachments if creating a grievance
+        const actionData = {
+            ...mergedData,
+            attachments: newContext.collectedData?.attachments
+        };
+
+        action = await executeAction(actionData as any);
         console.log('Action Result:', action);
 
         if (action && action.success && action.data) {
