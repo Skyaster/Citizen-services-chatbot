@@ -94,16 +94,18 @@ export const RequestList: React.FC<RequestListProps> = ({ requests, isLoading })
                             <td className="request-list__id">
                                 <code>{request.id.slice(0, 8)}...</code>
                             </td>
-                            <td className="request-list__category">
-                                <span className="request-list__category-icon">
-                                    {categoryLabels[request.category] || 'R'}
-                                </span>
-                                <span className="request-list__category-text">
-                                    {request.category}
-                                    {request.sub_category && (
-                                        <small> / {request.sub_category}</small>
-                                    )}
-                                </span>
+                            <td>
+                                <div className="request-list__category">
+                                    <span className="request-list__category-icon">
+                                        {categoryLabels[request.category] || 'R'}
+                                    </span>
+                                    <span className="request-list__category-text">
+                                        {request.category}
+                                        {request.sub_category && (
+                                            <small> / {request.sub_category}</small>
+                                        )}
+                                    </span>
+                                </div>
                             </td>
                             <td className="request-list__description">
                                 {request.description?.slice(0, 50)}

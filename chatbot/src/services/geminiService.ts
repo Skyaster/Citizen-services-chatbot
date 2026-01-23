@@ -219,18 +219,39 @@ Jo chahiye woh type karein!`;
     }
 
     if (context.currentFlow === 'grievance' && context.collectedData?.category) {
+        // Step 2: Collect Location (if not yet collected)
+        if (!context.collectedData.location) {
+            const locationMsg = lang === 'hi'
+                ? `ठीक है। कृपया समस्या का संक्षिप्त विवरण दें।`
+                : lang === 'hinglish'
+                    ? `Theek hai. Please issue ka brief description dein.`
+                    : `Got it. Please briefly describe the problem.`;
+
+            return {
+                message: locationMsg,
+                structuredData: {
+                    type: 'grievance', // Keep in grievance flow
+                    category: context.collectedData.category,
+                    location: userMessage // Identify this user message as the location
+                }
+            };
+        }
+
+        // Step 3: Collect Description (if location is present)
+        // At this point we have category and location (from context), so this message is the description
         const grievanceMsg = lang === 'hi'
             ? `धन्यवाद। मैंने नोट कर लिया है। आपकी शिकायत प्रोसेस हो रही है...`
             : lang === 'hinglish'
                 ? `Thank you. Maine note kar liya hai. Aapki complaint process ho rahi hai...`
                 : `Thank you. I've noted that. Processing your complaint...`;
+
         return {
             message: grievanceMsg,
             structuredData: {
                 type: 'grievance',
                 category: context.collectedData.category,
-                description: userMessage,
-                location: 'Detected from message'
+                location: context.collectedData.location,
+                description: userMessage
             }
         };
     }

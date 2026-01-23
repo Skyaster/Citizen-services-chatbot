@@ -39,6 +39,11 @@ export async function fetchAllRequests(
     }
     if (filters?.status) {
         query = query.eq('status', filters.status);
+    } else {
+        // Default: Hide terminal statuses (resolved, closed, rejected) unless explicitly filtered
+        query = query.neq('status', 'resolved')
+            .neq('status', 'closed')
+            .neq('status', 'rejected');
     }
     if (filters?.priority) {
         query = query.eq('priority', filters.priority);

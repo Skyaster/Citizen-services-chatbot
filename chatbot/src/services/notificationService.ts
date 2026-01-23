@@ -108,3 +108,29 @@ export async function markAsRead(notificationId: string, citizenId: string): Pro
         return true;
     }
 }
+
+/**
+ * Verify which notifications still exist in the database
+ * Returns the list of IDs that are still valid.
+ */
+export async function verifyActiveNotifications(notificationIds: string[]): Promise<string[]> {
+    if (!notificationIds || notificationIds.length === 0) return [];
+
+    if (isDemoMode) {
+        return notificationIds.filter(id => demoNotifications.some(n => n.id === id));
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('id')
+            .in('id', notificationIds);
+
+        if (error) throw error;
+
+        return (data || []).map(n => String(n.id));
+    } catch (error) {
+        console.error('Error verifying notifications:', error);
+        return notificationIds; // If error, assume verified to prevent accidental deletion
+    }
+}

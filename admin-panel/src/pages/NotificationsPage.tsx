@@ -152,7 +152,7 @@ export const NotificationsPage: React.FC = () => {
                                                     {new Date(item.created_at).toLocaleDateString()}
                                                 </span>
                                                 <button
-                                                    className="btn-icon delete-btn"
+                                                    className="delete-btn icon-btn"
                                                     onClick={() => handleDelete(item.id)}
                                                     title="Delete Notification"
                                                 >

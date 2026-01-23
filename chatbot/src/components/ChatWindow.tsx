@@ -12,7 +12,7 @@ import { delay } from '../utils/helpers';
 
 
 // Import notification service
-import { getUnreadNotifications, markAsRead } from '../services/notificationService';
+import { getUnreadNotifications, markAsRead, verifyActiveNotifications } from '../services/notificationService';
 
 export const ChatWindow: React.FC = () => {
     const [messages, setMessages] = useState<Message[]>([]);
@@ -20,6 +20,7 @@ export const ChatWindow: React.FC = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [showQuickActions, setShowQuickActions] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesRef = useRef<Message[]>([]); // Ref to access messages in interval
 
     // Mock citizen ID (must be a valid UUID for DB)
     const citizenId = '00000000-0000-0000-0000-000000000000';
@@ -30,6 +31,7 @@ export const ChatWindow: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        messagesRef.current = messages; // Keep ref in sync
         scrollToBottom();
     }, [messages, isTyping, scrollToBottom]);
 
@@ -41,8 +43,11 @@ export const ChatWindow: React.FC = () => {
         // Initial fetch
         checkNotifications();
 
-        // Poll every 30 seconds
-        const interval = setInterval(checkNotifications, 30000);
+        // Poll every 5 seconds (faster to catch deletions)
+        const interval = setInterval(() => {
+            checkNotifications();
+            verifyNotifications();
+        }, 5000);
         return () => clearInterval(interval);
     }, []);
 
@@ -62,6 +67,28 @@ export const ChatWindow: React.FC = () => {
 
             // Mark all as read immediately so they don't reappear
             unread.forEach(n => markAsRead(n.id, citizenId));
+        }
+    };
+
+    const verifyNotifications = async () => {
+        // Use ref to get current messages without stale closure
+        const currentMessages = messagesRef.current;
+        const notificationIds = currentMessages
+            .filter(m => m.id.startsWith('notif_'))
+            .map(m => m.id.replace('notif_', ''));
+
+        if (notificationIds.length === 0) return;
+
+        // Check which ones still exist in DB
+        const activeIds = await verifyActiveNotifications(notificationIds);
+        const activeSet = new Set(activeIds);
+
+        // If some are missing (deleted), update state to remove them
+        if (activeIds.length !== notificationIds.length) {
+            setMessages(prev => prev.filter(m => {
+                if (!m.id.startsWith('notif_')) return true; // Keep normal messages
+                return activeSet.has(m.id.replace('notif_', ''));
+            }));
         }
     };
 
